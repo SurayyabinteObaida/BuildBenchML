@@ -15,6 +15,5 @@ services:
   - type: web
     name: buildbench-ml-frontend
     runtime: static
-    plan: free
     staticPublishPath: frontend
     rootDir: .
