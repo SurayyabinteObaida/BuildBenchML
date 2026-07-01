@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: buildbench-ml-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: ALLOWED_ORIGIN
+        value: https://buildbench-ml.onrender.com
+        # Update this if you rename the frontend service --
+        # must exactly match the deployed frontend's URL, no trailing slash.
+
+  - type: web
+    name: buildbench-ml-frontend
+    runtime: static
+    plan: free
+    staticPublishPath: frontend
+    rootDir: .

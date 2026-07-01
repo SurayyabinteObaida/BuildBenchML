@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ML Lab Builder — API Tester</title>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --panel: #ffffff;
+    --border: #e2e2df;
+    --ink: #1f2320;
+    --muted: #6b7069;
+    --accent: #2d6a4f;
+    --accent-soft: #eaf3ee;
+    --error: #b3261e;
+    --error-soft: #fbeceb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; max-width: 1300px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-size: 13px; margin: 12px 0 4px; color: var(--muted); }
+  select, input[type=range], input[type=number], button {
+    width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid var(--border);
+    font-size: 14px; background: white; color: var(--ink);
+  }
+  input[type=range] { padding: 0; }
+  button {
+    background: var(--accent); color: white; border: none; cursor: pointer;
+    font-weight: 600; margin-top: 16px;
+  }
+  button:hover { opacity: 0.92; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .step-list { list-style: none; padding: 0; margin: 0; }
+  .step-list li {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    margin-bottom: 6px; font-size: 13px;
+  }
+  .step-list .step-top { display: flex; align-items: center; justify-content: space-between; }
+  .step-list button.remove {
+    width: auto; background: transparent; color: var(--error); border: none;
+    font-weight: bold; padding: 0 6px; margin: 0;
+  }
+  .param-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+  .param-row label { margin: 4px 0 2px; font-size: 11px; }
+  .param-value-badge {
+    display: inline-block; background: var(--accent-soft); color: var(--accent);
+    border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 600; margin-left: 6px;
+  }
+  select.param-select { padding: 5px 6px; font-size: 12px; }
+  .result { min-height: 200px; }
+  .metric-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .metric-card {
+    background: var(--accent-soft); border-radius: 8px; padding: 12px 16px; min-width: 110px;
+  }
+  .metric-card .val { font-size: 22px; font-weight: 700; color: var(--accent); }
+  .metric-card .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .error-box {
+    background: var(--error-soft); color: var(--error); border-radius: 8px;
+    padding: 12px 16px; font-size: 14px; line-height: 1.4;
+  }
+  pre {
+    background: #f4f4f1; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; font-size: 12px; overflow-x: auto; max-height: 260px;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  table { border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: center; }
+  th { background: #f4f4f1; }
+  .compare-table th, .compare-table td { padding: 8px 12px; }
+  .compare-table td.best { background: var(--accent-soft); font-weight: 700; }
+  .run-label { font-size: 12px; color: var(--muted); }
+  .clear-link {
+    background: none; border: none; color: var(--muted); text-decoration: underline;
+    width: auto; font-size: 12px; padding: 0; margin: 8px 0 0; cursor: pointer;
+  }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<h1>ML Lab Builder — API Tester</h1>
+<div class="sub">Not the real canvas — a quick way to build a pipeline, tune it, and compare runs against each other.</div>
+
+<div class="layout">
+
+  <div class="panel">
+    <h2>1. Build a pipeline</h2>
+
+    <label for="datasetSelect">Dataset</label>
+    <select id="datasetSelect"></select>
+
+    <label for="prepSelect">Add preprocessing (optional)</label>
+    <select id="prepSelect"></select>
+
+    <label for="modelSelect">Model</label>
+    <select id="modelSelect"></select>
+
+    <label for="evalSelect">Add evaluation metric</label>
+    <select id="evalSelect"></select>
+
+    <h2 style="margin-top:20px;">Pipeline steps</h2>
+    <div class="hint" style="margin-bottom:8px;">Adjust sliders to tune the model, then run. Each run is kept below for comparison.</div>
+    <ul class="step-list" id="stepList"></ul>
+
+    <button id="runBtn">Run pipeline</button>
+    <div class="hint" id="statusHint"></div>
+  </div>
+
+  <div class="panel result">
+    <h2>2. Result</h2>
+    <div id="resultArea">
+      <div class="hint">Build a pipeline on the left, then click "Run pipeline."</div>
+    </div>
+
+    <div id="compareArea"></div>
+  </div>
+
+</div>
+
+<script>
+// Auto-detects environment: talks to localhost when opened as a local file or
+// served from localhost, and to the deployed Render backend otherwise. This
+// means the same file works unmodified for both local testing and production --
+// no manual find-and-replace needed before deploying.
+const API_BASE = (location.hostname === "" || location.hostname === "localhost" || location.hostname === "127.0.0.1")
+  ? "http://127.0.0.1:8000"
+  : "https://buildbench-ml-backend.onrender.com";
+
+let blocks = [];
+let steps = []; // {nodeId, blockId, label, category, params, paramSpecs}
+let nodeCounter = 1;
+let runHistory = []; // {id, label, taskType, metrics}
+let runCounter = 1;
+
+const CATEGORY_ORDER = { data: 0, split: 1, preprocessing: 2, model: 3, evaluation: 4 };
+
+async function loadBlocks() {
+  const res = await fetch(`${API_BASE}/api/blocks`);
+  const data = await res.json();
+  blocks = data.blocks;
+
+  const datasetSelect = document.getElementById("datasetSelect");
+  const prepSelect = document.getElementById("prepSelect");
+  const modelSelect = document.getElementById("modelSelect");
+  const evalSelect = document.getElementById("evalSelect");
+
+  fillSelect(datasetSelect, blocks.filter(b => b.category === "data"));
+  fillSelect(prepSelect, blocks.filter(b => b.category === "preprocessing"), true);
+  fillSelect(modelSelect, blocks.filter(b => b.category === "model"));
+  fillSelect(evalSelect, blocks.filter(b => b.category === "evaluation"), true);
+
+  // Seed dataset + split immediately -- the dataset select starts pre-selected
+  // on its first option, which fires no "change" event in the browser, so we
+  // can't rely on the listener alone to populate the pipeline.
+  setDataset(datasetSelect.value);
+  addStep("model:logistic_regression");
+  addStep("eval:accuracy");
+}
+
+function setDataset(datasetId) {
+  if (!datasetId) return;
+  const newBlock = blocks.find(b => b.id === datasetId);
+  const newTaskType = newBlock ? newBlock.taskType : null;
+
+  // If the task type changes (classification <-> regression), the old model
+  // and evaluation blocks are almost certainly wrong for the new dataset --
+  // clear them rather than let the student hit a confusing compiler error.
+  const oldDataBlock = steps.find(s => s.category === "data");
+  const oldTaskType = oldDataBlock
+    ? (blocks.find(b => b.id === oldDataBlock.blockId) || {}).taskType
+    : null;
+
+  steps = steps.filter(s => s.category !== "data" && s.category !== "split");
+  if (oldTaskType && newTaskType && oldTaskType !== newTaskType) {
+    steps = steps.filter(s => s.category !== "model" && s.category !== "evaluation");
+  }
+  addStep(datasetId);
+  addStep("split:train_test");
+}
+
+function fillSelect(selectEl, blockList, includeNone) {
+  selectEl.innerHTML = "";
+  if (includeNone) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "-- none --";
+    selectEl.appendChild(opt);
+  }
+  blockList.forEach(b => {
+    const opt = document.createElement("option");
+    opt.value = b.id;
+    opt.textContent = b.label;
+    selectEl.appendChild(opt);
+  });
+}
+
+function addStep(blockId) {
+  if (!blockId) return;
+  const block = blocks.find(b => b.id === blockId);
+  const nodeId = "n" + (nodeCounter++);
+  const params = {};
+  (block.params || []).forEach(p => { params[p.name] = p.default; });
+  steps.push({
+    nodeId, blockId, label: block.label, category: block.category,
+    params, paramSpecs: block.params || [],
+  });
+  sortSteps();
+  renderSteps();
+}
+
+function sortSteps() {
+  steps = steps
+    .map((s, i) => ({ ...s, _originalIndex: i }))
+    .sort((a, b) => {
+      const stageDiff = CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category];
+      return stageDiff !== 0 ? stageDiff : a._originalIndex - b._originalIndex;
+    });
+}
+
+function renderSteps() {
+  const list = document.getElementById("stepList");
+  list.innerHTML = "";
+  steps.forEach((s, i) => {
+    const li = document.createElement("li");
+
+    const top = document.createElement("div");
+    top.className = "step-top";
+    top.innerHTML = `<span>${i + 1}. ${s.label}</span>`;
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "remove";
+    removeBtn.textContent = "✕";
+    removeBtn.onclick = () => { steps.splice(i, 1); renderSteps(); };
+    top.appendChild(removeBtn);
+    li.appendChild(top);
+
+    if (s.paramSpecs && s.paramSpecs.length > 0) {
+      const paramRow = document.createElement("div");
+      paramRow.className = "param-row";
+      s.paramSpecs.forEach(spec => {
+        const lbl = document.createElement("label");
+        lbl.textContent = spec.label;
+        const badge = document.createElement("span");
+        badge.className = "param-value-badge";
+        badge.textContent = s.params[spec.name];
+        lbl.appendChild(badge);
+        paramRow.appendChild(lbl);
+
+        let input;
+        if (spec.kind === "choice") {
+          input = document.createElement("select");
+          input.className = "param-select";
+          spec.choices.forEach(c => {
+            const opt = document.createElement("option");
+            opt.value = c;
+            opt.textContent = c;
+            if (c === s.params[spec.name]) opt.selected = true;
+            input.appendChild(opt);
+          });
+          input.addEventListener("change", (e) => {
+            const raw = e.target.value;
+            s.params[spec.name] = isNaN(raw) || raw === "" ? raw : Number(raw);
+            badge.textContent = s.params[spec.name];
+          });
+        } else {
+          input = document.createElement("input");
+          input.type = "range";
+          input.min = spec.min;
+          input.max = spec.max;
+          input.step = spec.step || 1;
+          input.value = s.params[spec.name];
+          input.addEventListener("input", (e) => {
+            const v = spec.kind === "int" ? parseInt(e.target.value) : parseFloat(e.target.value);
+            s.params[spec.name] = v;
+            badge.textContent = v;
+          });
+        }
+        paramRow.appendChild(input);
+      });
+      li.appendChild(paramRow);
+    }
+
+    list.appendChild(li);
+  });
+}
+
+document.getElementById("datasetSelect").addEventListener("change", (e) => {
+  const hadModelOrEval = steps.some(s => s.category === "model" || s.category === "evaluation");
+  setDataset(e.target.value);
+  const stillHasModelOrEval = steps.some(s => s.category === "model" || s.category === "evaluation");
+  renderSteps();
+  document.getElementById("statusHint").textContent =
+    (hadModelOrEval && !stillHasModelOrEval)
+      ? "Switched dataset type (classification ↔ regression) — pick a new model and metric."
+      : "";
+});
+document.getElementById("prepSelect").addEventListener("change", (e) => addStep(e.target.value));
+document.getElementById("modelSelect").addEventListener("change", (e) => {
+  steps = steps.filter(s => s.category !== "model");
+  addStep(e.target.value);
+});
+document.getElementById("evalSelect").addEventListener("change", (e) => addStep(e.target.value));
+
+function buildRequestBody() {
+  const nodes = steps.map(s => ({ nodeId: s.nodeId, blockId: s.blockId, params: s.params }));
+  const edges = [];
+  for (let i = 0; i < steps.length - 1; i++) {
+    edges.push({ from: steps[i].nodeId, to: steps[i + 1].nodeId });
+  }
+  return { nodes, edges };
+}
+
+function pipelineSummaryLabel() {
+  const modelStep = steps.find(s => s.category === "model");
+  const prepSteps = steps.filter(s => s.category === "preprocessing");
+  let label = modelStep ? modelStep.label : "?";
+  const paramBits = modelStep
+    ? modelStep.paramSpecs.map(spec => `${spec.name}=${modelStep.params[spec.name]}`).join(", ")
+    : "";
+  if (paramBits) label += ` (${paramBits})`;
+  if (prepSteps.length > 0) label += ` + ${prepSteps.map(p => p.label).join(", ")}`;
+  return label;
+}
+
+async function runPipeline() {
+  const resultArea = document.getElementById("resultArea");
+  const statusHint = document.getElementById("statusHint");
+  const runBtn = document.getElementById("runBtn");
+
+  if (steps.length === 0) {
+    statusHint.textContent = "Add at least a dataset, model, and metric first.";
+    return;
+  }
+  if (!steps.some(s => s.category === "data")) {
+    statusHint.textContent = "";
+    resultArea.innerHTML = `<div class="error-box"><strong>No dataset selected</strong><br>Pick a dataset from the dropdown on the left.</div>`;
+    return;
+  }
+  if (!steps.some(s => s.category === "model")) {
+    statusHint.textContent = "";
+    resultArea.innerHTML = `<div class="error-box"><strong>No model selected</strong><br>Pick a model from the dropdown on the left.</div>`;
+    return;
+  }
+  if (!steps.some(s => s.category === "evaluation")) {
+    statusHint.textContent = "";
+    resultArea.innerHTML = `<div class="error-box"><strong>No evaluation metric selected</strong><br>Pick a metric from the dropdown on the left.</div>`;
+    return;
+  }
+
+  runBtn.disabled = true;
+  statusHint.textContent = "Training...";
+  resultArea.innerHTML = `<div class="hint">Running...</div>`;
+
+  try {
+    const body = buildRequestBody();
+    const res = await fetch(`${API_BASE}/api/pipeline/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      resultArea.innerHTML = `<div class="error-box"><strong>Pipeline error</strong><br>${data.detail}</div>`;
+      statusHint.textContent = "Fix the pipeline and try again.";
+      return;
+    }
+
+    renderResult(data);
+    recordRun(data);
+    statusHint.textContent = `Trained on ${data.trainRows} rows in ${data.trainSeconds}s.`;
+  } catch (err) {
+    resultArea.innerHTML = `<div class="error-box"><strong>Request failed</strong><br>${err.message}<br><br>Is the backend running at ${API_BASE}?</div>`;
+    statusHint.textContent = "";
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Canvas chart helpers -- plain HTML5 canvas, no chart library dependency.
+// ---------------------------------------------------------------------------
+
+function makeCanvas(width, height) {
+  const c = document.createElement("canvas");
+  c.width = width;
+  c.height = height;
+  c.style.maxWidth = "100%";
+  return c;
+}
+
+function drawConfusionHeatmap(matrix, labels) {
+  const cell = 70;
+  const padLeft = 130;
+  const padTop = 40;
+  const w = padLeft + cell * matrix.length + 20;
+  const h = padTop + cell * matrix.length + 20;
+  const canvas = makeCanvas(w, h);
+  const ctx = canvas.getContext("2d");
+  const maxVal = Math.max(...matrix.flat());
+
+  ctx.font = "11px -apple-system, sans-serif";
+  ctx.fillStyle = "#6b7069";
+  ctx.textAlign = "center";
+  ctx.fillText("Predicted", padLeft + (cell * matrix.length) / 2, 16);
+
+  ctx.save();
+  ctx.translate(16, padTop + (cell * matrix.length) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("Actual", 0, 0);
+  ctx.restore();
+
+  matrix.forEach((row, i) => {
+    row.forEach((val, j) => {
+      const intensity = maxVal > 0 ? val / maxVal : 0;
+      const x = padLeft + j * cell;
+      const y = padTop + i * cell;
+      ctx.fillStyle = `rgba(45, 106, 79, ${0.12 + intensity * 0.75})`;
+      ctx.fillRect(x, y, cell - 2, cell - 2);
+
+      ctx.fillStyle = intensity > 0.5 ? "#ffffff" : "#1f2320";
+      ctx.font = "bold 16px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(val, x + cell / 2 - 1, y + cell / 2 + 6);
+    });
+  });
+
+  ctx.fillStyle = "#6b7069";
+  ctx.font = "11px -apple-system, sans-serif";
+  labels.forEach((lbl, j) => {
+    const short = lbl.length > 12 ? lbl.slice(0, 11) + "…" : lbl;
+    ctx.save();
+    ctx.translate(padLeft + j * cell + cell / 2 - 1, padTop - 6);
+    ctx.textAlign = "center";
+    ctx.fillText(short, 0, 0);
+    ctx.restore();
+  });
+  labels.forEach((lbl, i) => {
+    const short = lbl.length > 16 ? lbl.slice(0, 15) + "…" : lbl;
+    ctx.textAlign = "right";
+    ctx.fillText(short, padLeft - 8, padTop + i * cell + cell / 2 + 4);
+  });
+
+  return canvas;
+}
+
+function drawFeatureImportance(items) {
+  const rowH = 22;
+  const padLeft = 160;
+  const chartW = 380;
+  const w = padLeft + chartW + 60;
+  const h = items.length * rowH + 20;
+  const canvas = makeCanvas(w, h);
+  const ctx = canvas.getContext("2d");
+  const maxVal = Math.max(...items.map(d => d.importance));
+
+  ctx.font = "12px -apple-system, sans-serif";
+  items.forEach((d, i) => {
+    const y = i * rowH + 10;
+    const barW = maxVal > 0 ? (d.importance / maxVal) * chartW : 0;
+
+    ctx.fillStyle = "#1f2320";
+    ctx.textAlign = "right";
+    const label = d.feature.length > 22 ? d.feature.slice(0, 21) + "…" : d.feature;
+    ctx.fillText(label, padLeft - 8, y + 12);
+
+    ctx.fillStyle = "#2d6a4f";
+    ctx.fillRect(padLeft, y + 2, barW, rowH - 8);
+
+    ctx.fillStyle = "#6b7069";
+    ctx.textAlign = "left";
+    ctx.fillText(d.importance.toFixed(3), padLeft + barW + 6, y + 12);
+  });
+
+  return canvas;
+}
+
+function drawPredictedVsActual(actual, predicted) {
+  const size = 360;
+  const pad = 40;
+  const canvas = makeCanvas(size + pad * 2, size + pad * 2);
+  const ctx = canvas.getContext("2d");
+
+  const allVals = [...actual, ...predicted];
+  const minV = Math.min(...allVals);
+  const maxV = Math.max(...allVals);
+  const range = maxV - minV || 1;
+
+  const toX = v => pad + ((v - minV) / range) * size;
+  const toY = v => pad + size - ((v - minV) / range) * size;
+
+  // diagonal reference line (perfect prediction)
+  ctx.strokeStyle = "#c9c9c4";
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(toX(minV), toY(minV));
+  ctx.lineTo(toX(maxV), toY(maxV));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // axes
+  ctx.strokeStyle = "#e2e2df";
+  ctx.beginPath();
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, pad + size);
+  ctx.lineTo(pad + size, pad + size);
+  ctx.stroke();
+
+  ctx.fillStyle = "#6b7069";
+  ctx.font = "11px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("Actual →", pad + size / 2, pad + size + 24);
+  ctx.save();
+  ctx.translate(12, pad + size / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("Predicted →", 0, 0);
+  ctx.restore();
+
+  // points
+  ctx.fillStyle = "rgba(45, 106, 79, 0.55)";
+  actual.forEach((a, i) => {
+    const x = toX(a);
+    const y = toY(predicted[i]);
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  return canvas;
+}
+
+function drawRunHistoryChart(runHistory, metricKey) {
+  const withMetric = runHistory.filter(r => r.metrics[metricKey] !== undefined);
+  if (withMetric.length < 2) return null;
+
+  const w = 560, h = 200, pad = 36;
+  const canvas = makeCanvas(w, h);
+  const ctx = canvas.getContext("2d");
+
+  const vals = withMetric.map(r => r.metrics[metricKey]);
+  const minV = Math.min(...vals, 0);
+  const maxV = Math.max(...vals);
+  const range = (maxV - minV) || 1;
+
+  const toX = i => pad + (i / (withMetric.length - 1)) * (w - pad * 2);
+  const toY = v => h - pad - ((v - minV) / range) * (h - pad * 2);
+
+  ctx.strokeStyle = "#e2e2df";
+  ctx.beginPath();
+  ctx.moveTo(pad, pad - 10);
+  ctx.lineTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#2d6a4f";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  withMetric.forEach((r, i) => {
+    const x = toX(i), y = toY(r.metrics[metricKey]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#2d6a4f";
+  withMetric.forEach((r, i) => {
+    const x = toX(i), y = toY(r.metrics[metricKey]);
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.fillStyle = "#6b7069";
+  ctx.font = "10px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  withMetric.forEach((r, i) => {
+    ctx.fillText("run " + r.id, toX(i), h - pad + 14);
+  });
+
+  return canvas;
+}
+
+
+function renderResult(data) {
+  const resultArea = document.getElementById("resultArea");
+  resultArea.innerHTML = "";
+
+  const metricRow = document.createElement("div");
+  metricRow.className = "metric-row";
+  const m = data.metrics;
+  if (m.accuracy !== undefined) metricRow.innerHTML += metricCard((m.accuracy * 100).toFixed(1) + "%", "Accuracy");
+  if (m.rmse !== undefined) metricRow.innerHTML += metricCard(m.rmse.toLocaleString(), "RMSE");
+  if (m.r2 !== undefined) metricRow.innerHTML += metricCard(m.r2.toFixed(3), "R² Score");
+  metricRow.innerHTML += metricCard(data.trainRows, "Train rows");
+  metricRow.innerHTML += metricCard(data.testRows, "Test rows");
+  resultArea.appendChild(metricRow);
+
+  if (m.confusionMatrix) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `<strong>Confusion Matrix</strong>`;
+    wrap.appendChild(drawConfusionHeatmap(m.confusionMatrix, m.confusionMatrixLabels));
+    resultArea.appendChild(wrap);
+  }
+
+  if (m.predictedVsActual) {
+    const wrap = document.createElement("div");
+    wrap.style.marginTop = "16px";
+    wrap.innerHTML = `<strong>Predicted vs Actual</strong><div class="hint">Points on the dashed line are perfect predictions. The tighter the cloud hugs the line, the better the model.</div>`;
+    wrap.appendChild(drawPredictedVsActual(m.predictedVsActual.actual, m.predictedVsActual.predicted));
+    resultArea.appendChild(wrap);
+  }
+
+  if (data.featureImportance) {
+    const wrap = document.createElement("div");
+    wrap.style.marginTop = "16px";
+    wrap.innerHTML = `<strong>Feature Importance</strong><div class="hint">Which columns this model relied on most to make predictions.</div>`;
+    wrap.appendChild(drawFeatureImportance(data.featureImportance));
+    resultArea.appendChild(wrap);
+  }
+
+  const details = document.createElement("details");
+  details.innerHTML = `<summary>Raw response</summary><pre>${JSON.stringify(data, null, 2)}</pre>`;
+  resultArea.appendChild(details);
+}
+
+function metricCard(val, label) {
+  return `<div class="metric-card"><div class="val">${val}</div><div class="lbl">${label}</div></div>`;
+}
+
+function recordRun(data) {
+  runHistory.push({
+    id: runCounter++,
+    label: pipelineSummaryLabel(),
+    taskType: data.taskType,
+    metrics: data.metrics,
+  });
+  renderCompare();
+}
+
+function renderCompare() {
+  const el = document.getElementById("compareArea");
+  el.innerHTML = "";
+  if (runHistory.length === 0) return;
+
+  const isClassification = runHistory[0].taskType === "classification";
+  const metricKey = isClassification ? "accuracy" : "r2";
+  const metricLabel = isClassification ? "Accuracy" : "R² Score";
+
+  const withMetric = runHistory.filter(r => r.metrics[metricKey] !== undefined);
+  const bestVal = withMetric.length
+    ? Math.max(...withMetric.map(r => r.metrics[metricKey]))
+    : null;
+
+  const heading = document.createElement("h2");
+  heading.style.marginTop = "24px";
+  heading.textContent = `Run history (${runHistory.length})`;
+  el.appendChild(heading);
+
+  const trendCanvas = drawRunHistoryChart(runHistory, metricKey);
+  if (trendCanvas) {
+    const trendWrap = document.createElement("div");
+    trendWrap.innerHTML = `<div class="hint" style="margin-bottom:6px;">${metricLabel} across your runs, in order.</div>`;
+    trendWrap.appendChild(trendCanvas);
+    el.appendChild(trendWrap);
+  }
+
+  let html = `<table class="compare-table"><tr><th>#</th><th>Pipeline</th><th>${metricLabel}</th></tr>`;
+  runHistory.forEach(r => {
+    const val = r.metrics[metricKey];
+    const isBest = val !== undefined && val === bestVal;
+    const displayVal = val === undefined
+      ? "—"
+      : (metricKey === "accuracy" ? (val * 100).toFixed(1) + "%" : val.toFixed(3));
+    html += `<tr>
+      <td>${r.id}</td>
+      <td class="run-label" style="text-align:left;">${r.label}</td>
+      <td class="${isBest ? 'best' : ''}">${displayVal}</td>
+    </tr>`;
+  });
+  html += `</table>`;
+  html += `<button class="clear-link" id="clearHistoryBtn">Clear history</button>`;
+
+  const tableWrap = document.createElement("div");
+  tableWrap.innerHTML = html;
+  el.appendChild(tableWrap);
+
+  document.getElementById("clearHistoryBtn").addEventListener("click", () => {
+    runHistory = [];
+    renderCompare();
+  });
+}
+
+document.getElementById("runBtn").addEventListener("click", runPipeline);
+
+loadBlocks().catch(err => {
+  document.getElementById("statusHint").textContent =
+    "Couldn't load blocks. Is the backend running at " + API_BASE + "?";
+});
+</script>
+
+</body>
+</html>
